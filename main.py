@@ -296,12 +296,30 @@ def name_of(f):
     return f"{f['title']} ({handles})" if f["title"] and f["title"] != f["with"][0] else handles
 
 
+_live = set()
+
+
+def session_live(account):
+    """The browser is signed in as this account: the user's Instagram connection says so, once."""
+    if account in _live:
+        return
+    try:
+        if not any(x.get("account") == account for x in app.accounts("instagram")):
+            app.adopt("instagram", account, {})
+            log(f"instagram: {account}'s sign-in is the connection")
+        _live.add(account)
+    except Exception as e:  # noqa: BLE001  (never stops a poll)
+        log(f"instagram: couldn't record the sign-in: {e}")
+
+
 def poll():
     with poll_lock:
         backfill = not convs
         a = page({"op": "read", "requests": True})
         me = a.get("me") or {}
         status["account"] = me.get("username") or status["account"]
+        if status["account"] and SWITCH:
+            session_live(status["account"])
         if a.get("requests_error"):
             log(f"message requests: {a['requests_error']}")
         changed = 0
