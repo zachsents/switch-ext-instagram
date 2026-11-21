@@ -1,11 +1,11 @@
 {
-  "name": "spur-instagram",
+  "name": "switch-ext-instagram",
   "version": "0.1.0",
   "private": true,
-  "description": "Instagram DMs as a Switch spur: the inbox read through the browser spur without opening a chat, so nothing shows Seen.",
+  "description": "Instagram DMs as a Switch extension: the inbox read through the browser extension without opening a chat, so nothing shows Seen.",
   "license": "MIT",
-  "repository": "github:zachsents/spur-instagram",
-  "spur": {
+  "repository": "github:zachsents/switch-ext-instagram",
+  "extension": {
     "name": "instagram-dms",
     "command": [
       "python3",

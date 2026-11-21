@@ -121,7 +121,7 @@ def js(op):
 
 
 SWITCH = bool(os.environ.get("SWITCH_MACHINE"))
-"""Run by Switch: the page is driven through the browser spur's act tool, in this spur's own session tab; else
+"""Run by Switch: the page is driven through the browser extension's act tool, in this extension's own session tab; else
 through Switchboard's macOS appendage."""
 
 
@@ -130,7 +130,7 @@ def text_of(result):
 
 
 def switch_steps(ops, timeout):
-    """The same ops through the browser spur's act tool, in one call, as the macOS appendage's browser action took them."""
+    """The same ops through the browser extension's act tool, in one call, as the macOS appendage's browser action took them."""
     r = app.call("browser_act", {"op": "steps", "session": SESSION, "steps": ops}, timeout=timeout + 15)
     if r.get("isError"):
         raise RuntimeError(text_of(r)[:400])
