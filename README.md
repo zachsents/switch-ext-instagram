@@ -1,3 +1,5 @@
+**Moved to [zachsents/switch](https://github.com/zachsents/switch/tree/main/extensions/instagram).** This repo is archived.
+
 # switch-ext-instagram
 
 The inbox read through the browser extension without opening a chat, so nothing shows Seen.
