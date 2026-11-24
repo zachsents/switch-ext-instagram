@@ -354,7 +354,7 @@ def load_state():
     for row in json.loads(out).get("rows", []):
         entity, facts = (row.get("entity"), row.get("facts")) if isinstance(row, dict) else row
         if entity and isinstance(facts, dict):
-            convs[entity] = facts
+            convs.setdefault(entity, facts)  # what a look has read since is newer
     log(f"{len(convs)} conversations known from {STREAM}")
 
 
@@ -445,9 +445,8 @@ def loop():
 # Actions.
 
 
-def find(ref):
-    """A known conversation by thread id, link, entity or @username."""
-    ref = str(ref or "").strip()
+def known(ref):
+    """A known conversation by thread id, link, entity or @username, or None."""
     m = re.search(r"/direct/t/(\d+)", ref)
     tid = m.group(1) if m else ref.split(":", 1)[1] if ref.startswith("instagram-thread:") else ref
     if f"instagram-thread:{tid}" in convs:
@@ -457,8 +456,23 @@ def find(ref):
             return k, f
     handle = ref.lstrip("@").lower()
     hits = [(k, f) for k, f in convs.items() if not f.get("group") and [w.lower() for w in f.get("with") or []] == [handle]]
-    if hits:
-        return max(hits, key=lambda kf: kf[1].get("last_at") or 0)
+    return max(hits, key=lambda kf: kf[1].get("last_at") or 0) if hits else None
+
+
+def find(ref):
+    """A known conversation by thread id, link, entity or @username."""
+    ref = str(ref or "").strip()
+    hit = known(ref)
+    if hit is None:
+        # Just started, the brain may not have answered yet (the core was still coming up): read it again
+        # before refusing.
+        try:
+            load_state()
+        except RuntimeError as e:
+            log(f"state: {e}")
+        hit = known(ref)
+    if hit is not None:
+        return hit
     raise ValueError(f"no known Instagram conversation matches {ref!r}; run check first, or start a new chat in the browser")
 
 
