@@ -28,6 +28,7 @@
       "calls": [
         "browser_act"
       ]
-    }
+    },
+    "heartbeat": 1080000
   }
 }

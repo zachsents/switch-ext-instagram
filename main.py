@@ -61,7 +61,10 @@ PAGE_JS = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "page.js
 poll_lock = threading.Lock()
 wake = threading.Event()
 convs = {}  # entity -> its latest facts
-status = {"state": "starting", "polls": 0, "errors": 0, "vitals_at": 0, "signed_out_event_at": 0, "account": None}
+status = {"state": "starting", "polls": 0, "errors": 0, "vitals_at": 0, "signed_out_event_at": 0, "account": None,
+          "caught_up": False, "caught_up_at": int(time.time() * 1000), "said_caught_up": None}
+"""`caught_up`: whether the last look read the whole inbox and the message requests; `caught_up_at`: when a
+look last did; `said_caught_up`: what the latest heartbeat said of it."""
 
 
 
@@ -314,6 +317,7 @@ def session_live(account):
 
 def poll():
     with poll_lock:
+        status["caught_up"] = False  # until this look reads everything
         backfill = not convs
         a = page({"op": "read", "requests": True})
         me = a.get("me") or {}
@@ -334,6 +338,9 @@ def poll():
                    [key], importance=0.7 if facts["new_from_them"] else 0.3)
         if changed:
             log(f"{changed} conversations changed" + (" (backfill)" if backfill else ""))
+        status["caught_up"] = not a.get("requests_error")
+        if status["caught_up"]:
+            status["caught_up_at"] = now_ms()
         return "ok"
 
 
@@ -376,6 +383,7 @@ def vitals(state, detail=None, live=False, event=None):
         "live": live,
         "polls": status["polls"],
         "detail": detail,
+        "behind_ms": 0 if status["caught_up"] else max(0, t - status["caught_up_at"]),
     }
     summary = {
         "ok": f"Watching {len(recent)} Instagram chats from this week; {facts['unread']} unread, {facts['waiting_on_them']} waiting on a reply",
@@ -386,6 +394,12 @@ def vitals(state, detail=None, live=False, event=None):
     record("observation", {"entity": SENSE, "kind": "sense", "name": "Instagram DM watch", "summary": summary, "facts": facts},
            [SENSE], stream=VITALS)
     status["vitals_at"] = t
+    status["said_caught_up"] = status["caught_up"]
+
+
+def due():
+    """A heartbeat is due: the last is HEARTBEAT_S old, or whether it's caught up changed since."""
+    return now_ms() - status["vitals_at"] > HEARTBEAT_S * 1000 or status["caught_up"] != status["said_caught_up"]
 
 
 def loop():
@@ -398,7 +412,7 @@ def loop():
         try:
             state = poll()
             status["polls"] += 1
-            if status["state"] != state or now_ms() - status["vitals_at"] > HEARTBEAT_S * 1000:
+            if status["state"] != state or due():
                 vitals(state, live=live)
             status["state"], status["errors"] = state, 0
         except SignedOut:
@@ -407,20 +421,20 @@ def loop():
             if status["state"] != "signed_out" or again:
                 vitals("signed_out", event="signed_out")
                 status["signed_out_event_at"] = now_ms()
-            elif now_ms() - status["vitals_at"] > HEARTBEAT_S * 1000:
+            elif due():
                 vitals("signed_out")
             status["state"] = "signed_out"
             wait_s = SIGNED_OUT_S
         except Paused as e:
             log(f"paused: {e}")
-            if status["state"] != "paused":
+            if status["state"] != "paused" or due():
                 vitals("paused", str(e)[:200])
             status["state"] = "paused"
             wait_s = CANCEL_PAUSE_S
         except Exception as e:  # REVIEW: one failed poll is retried with backoff; it never kills the sense
             status["errors"] += 1
             log(f"poll failed ({status['errors']}): {e}")
-            if status["state"] != "error" or status["errors"] == 3:
+            if status["state"] != "error" or status["errors"] == 3 or due():
                 vitals("error", str(e)[:200])
             status["state"] = "error"
             wait_s = min(60 * 2 ** (status["errors"] - 1), 900)
